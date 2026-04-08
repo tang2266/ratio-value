@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>比與比值的數感競賽</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="數感競賽">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('PWA ServiceWorker 註冊成功！'))
+            .catch(err => console.log('PWA 註冊失敗：', err));
+        });
+      }
+    </script>
+
+    <style>
+        /* 隱藏元素用的輔助類別 */
+        .hidden { display: none !important; }
+        /* 防止雙擊時選取文字造成視覺干擾 */
+        .no-select { user-select: none; -webkit-user-select: none; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-gray-800 font-sans p-2 md:p-4">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- 頁首 -->
+        <header class="mb-4 flex items-center justify-center gap-3">
+            <div class="inline-flex items-center justify-center p-2 bg-blue-600 text-white rounded-full shadow-lg">
+                <i data-lucide="circle-dollar-sign" class="w-8 h-8"></i>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900">比與比值的數感競賽</h1>
+        </header>
+
+        <!-- 主要內容區塊 -->
+        <main id="app-main" class="transition-all duration-300 ease-in-out"></main>
+
+        <!-- 頁尾 -->
+        <footer class="mt-6 text-center text-xs text-gray-400">
+            <p>結合最佳化演算法與數學表徵形式的數位教案</p>
+        </footer>
+    </div>
+
+    <!-- JavaScript 邏輯區 -->
+    <script>
+        // ==========================================
+        // 基礎輔助函數
+        // ==========================================
+        function generateTeacherTip(text) {
+            return `
+                <div class="mt-4 border-l-4 border-yellow-400 bg-yellow-50 p-3 rounded-r-lg">
+                    <button onclick="toggleTip(this)" class="flex items-center justify-between w-full text-left font-bold text-yellow-800 focus:outline-none">
+                        <span class="flex items-center"><i data-lucide="lightbulb" class="w-4 h-4 mr-2"></i> 教師引導小提示</span>
+                        <i data-lucide="chevron-right" class="w-4 h-4 transform transition-transform tip-icon"></i>
+                    </button>
+                    <p class="mt-2 text-yellow-700 text-sm leading-relaxed whitespace-pre-wrap hidden tip-content">${text}</p>
+                </div>
+            `;
+        }
+
+        window.toggleTip = function(btn) {
+            const content = btn.nextElementSibling;
+            const icon = btn.querySelector('.tip-icon');
+            content.classList.toggle('hidden');
+            icon.classList.toggle('rotate-90');
+        };
+
+        // 最大公因數與約分
+        function gcd(a, b) {
+            return b === 0 ? a : gcd(b, a % b);
+        }
+        function simplify(n, d) {
+            const g = gcd(n, d);
+            return { n: n / g, d: d / g };
+        }
+
+        // 標準垂直分數 HTML 渲染器 (支援數字與文字)
+        function renderFractionHTML(n, d) {
+            if (d === 1 && typeof n === 'number') return `<span class="mx-0.5 font-bold text-[1.1em]">${n}</span>`;
+            return `
+                <span class="inline-flex flex-col items-center justify-center align-middle text-[0.9em] mx-1 leading-none">
+                    <span class="border-b-[1.5px] border-current pb-[1px] px-0.5">${n}</span>
+                    <span class="pt-[1px] px-0.5">${d}</span>
+                </span>
+            `;
+        }
+
+        // ==========================================
+        // 關卡：以物易物 (四種數學表徵 & 隨機比例)
+        // ==========================================
+        
+        const LEVELS_TEMPLATE = [
+            {
+                id: 1, startItem: '🍎蘋果', startQty: 1, targetItem: '🥩肉', optimalQty: 0, optimalPath: [],
+                trades: [
+                    { id: 1, from: '🍎蘋果', to: '🍌香蕉' }, { id: 2, from: '🐟魚', to: '🥩肉' }, { id: 3, from: '🍌香蕉', to: '🥕蘿蔔' }, 
+                    { id: 4, from: '🦐蝦子', to: '🍞麵包' }, { id: 5, from: '🍎蘋果', to: '🍊橘子' }, { id: 6, from: '🍞麵包', to: '🥩肉' }, 
+                    { id: 7, from: '🍊橘子', to: '🐟魚' }, { id: 8, from: '🦐蝦子', to: '🐟魚' }, { id: 9, from: '🥕蘿蔔', to: '🥩肉' }
+                ] // 3x3 (9個商人)
+            },
+            {
+                id: 2, startItem: '🪵木材', startQty: 1, targetItem: '🪙金幣', optimalQty: 0, optimalPath: [],
+                trades: [
+                    { id: 1, from: '🪵木材', to: '🪨石頭' }, { id: 2, from: '💧水', to: '💎鑽石' }, { id: 3, from: '🪵木材', to: '🌿草藥' }, 
+                    { id: 4, from: '💎鑽石', to: '🪙金幣' }, { id: 5, from: '🪨石頭', to: '🔮水晶' }, { id: 6, from: '🪵木材', to: '💧水' }, 
+                    { id: 7, from: '💧水', to: '🪙金幣' }, { id: 8, from: '⛏️十字鎬', to: '🪙金幣' }, { id: 9, from: '🌿草藥', to: '🔮水晶' }, 
+                    { id: 10, from: '🪨石頭', to: '⛏️十字鎬' }, { id: 11, from: '🌿草藥', to: '💧水' }, { id: 12, from: '🔮水晶', to: '🪙金幣' }
+                ] // 3x4 (12個商人)
+            },
+            {
+                id: 3, startItem: '🌱種子', startQty: 1, targetItem: '🧪魔法藥水', optimalQty: 0, optimalPath: [],
+                trades: [
+                    { id: 1, from: '🌱種子', to: '🌺花朵' }, { id: 2, from: '🕸️蜘蛛網', to: '🐝蜜蜂' }, { id: 3, from: '🦋蝴蝶', to: '🧪魔法藥水' }, 
+                    { id: 4, from: '🌱種子', to: '🍄蘑菇' }, { id: 5, from: '🐝蜜蜂', to: '🧪魔法藥水' }, { id: 6, from: '🌱種子', to: '🕸️蜘蛛網' }, 
+                    { id: 7, from: '🍄蘑菇', to: '🕸️蜘蛛網' }, { id: 8, from: '🌺花朵', to: '🦋蝴蝶' }, { id: 9, from: '🕸️蜘蛛網', to: '🦇蝙蝠翼' }, 
+                    { id: 10, from: '🌺花朵', to: '🐝蜜蜂' }, { id: 11, from: '🦇蝙蝠翼', to: '🧪魔法藥水' }, { id: 12, from: '🍄蘑菇', to: '🦋蝴蝶' },
+                    { id: 13, from: '🌱種子', to: '🐸青蛙' }, { id: 14, from: '🐸青蛙', to: '🐍蛇' }, { id: 15, from: '🐍蛇', to: '🧪魔法藥水' }, 
+                    { id: 16, from: '🌺花朵', to: '🐸青蛙' }
+                ] // 4x4 (16個商人)
+            }
+        ];
+
+        let LEVELS = JSON.parse(JSON.stringify(LEVELS_TEMPLATE)); 
+
+        let barterState = {
+            displayMode: 0, 
+            currentRound: 0,
+            gameState: 'modeSelect', 
+            timeLeft: 180,
+            inventory: {},
+            path: [], 
+            scores: [],
+            msg: ''
+        };
+        let barterTimer = null;
+
+        function randomizeAndCalculateOptimal() {
+            LEVELS.forEach(level => {
+                level.trades.forEach(t => {
+                    t.fromQty = Math.floor(Math.random() * 5) + 1;
+                    t.toQty = Math.floor(Math.random() * 5) + 1;
+                });
+
+                let maxTargetQty = 0;
+                let bestPath = [];
+
+                function dfs(currentItem, currentQty, currentPath, usedTrades) {
+                    if (currentItem === level.targetItem) {
+                        if (currentQty > maxTargetQty) {
+                            maxTargetQty = currentQty;
+                            bestPath = [...currentPath];
+                        }
+                        return; 
+                    }
+
+                    const possibleTrades = level.trades.filter(t => t.from === currentItem && !usedTrades.has(t.id));
+
+                    for (let t of possibleTrades) {
+                        let gained = (currentQty / t.fromQty) * t.toQty;
+                        usedTrades.add(t.id);
+                        currentPath.push(t.id);
+                        dfs(t.to, gained, currentPath, usedTrades);
+                        currentPath.pop();
+                        usedTrades.delete(t.id);
+                    }
+                }
+
+                dfs(level.startItem, level.startQty, [], new Set());
+                level.currentOptimalQty = Math.round(maxTargetQty * 100) / 100;
+                level.currentOptimalPath = bestPath;
+            });
+        }
+
+        window.selectBarterMode = function(modeIndex) {
+            barterState.displayMode = modeIndex;
+            barterState.currentRound = 0;
+            barterState.scores = [];
+            barterState.path = [];
+            barterState.gameState = 'start';
+            barterState.msg = '';
+            
+            randomizeAndCalculateOptimal();
+            
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+        function startBarterTimer() {
+            clearInterval(barterTimer);
+            barterTimer = setInterval(() => {
+                if (barterState.gameState === 'playing' && barterState.timeLeft > 0) {
+                    barterState.timeLeft--;
+                    updateBarterTimerUI();
+                    if (barterState.timeLeft === 0) {
+                        endBarterRound('時間到！');
+                    }
+                } else {
+                    clearInterval(barterTimer);
+                }
+            }, 1000);
+        }
+
+        function updateBarterTimerUI() {
+            const timerContainer = document.getElementById('barter-timer-container');
+            const timerText = document.getElementById('barter-timer-text');
+            if (!timerContainer) return;
+
+            const m = Math.floor(barterState.timeLeft / 60);
+            const s = (barterState.timeLeft % 60).toString().padStart(2, '0');
+            timerText.innerText = `${m}:${s}`;
+
+            if (barterState.timeLeft <= 30) {
+                timerContainer.className = 'flex items-center font-bold px-2 py-1 rounded-full bg-red-100 text-red-600 animate-pulse text-sm';
+            } else {
+                timerContainer.className = 'flex items-center font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-600 text-sm';
+            }
+        }
+
+        function recalculateInventory() {
+            const level = LEVELS[barterState.currentRound];
+            let currentInv = {};
+            currentInv[level.startItem] = level.startQty;
+
+            barterState.path.forEach(tradeId => {
+                const trade = level.trades.find(t => t.id === tradeId);
+                const currentQty = currentInv[trade.from] || 0;
+                if (currentQty > 0) {
+                    let gained = (currentQty / trade.fromQty) * trade.toQty;
+                    currentInv[trade.from] = 0; 
+                    currentInv[trade.to] = (currentInv[trade.to] || 0) + gained;
+                }
+            });
+
+            for (let key in currentInv) {
+                currentInv[key] = Math.round(currentInv[key] * 100) / 100;
+            }
+            barterState.inventory = currentInv;
+        }
+
+        function getPathString(pathArray, level) {
+            if (!pathArray || pathArray.length === 0) return "<span class='text-gray-400 text-sm'>無交易紀錄</span>";
+            
+            let currentQty = level.startQty;
+            
+            return pathArray.map(id => {
+                const tr = level.trades.find(t => t.id === id);
+                let gained = (currentQty / tr.fromQty) * tr.toQty;
+                gained = Math.round(gained * 100) / 100;
+                
+                const stepHtml = `
+                    <div class="inline-flex flex-col items-center bg-white px-2 py-1 rounded border border-gray-300 shadow-sm">
+                        <div class="text-xs font-bold text-gray-700 flex items-center">
+                            ${tr.from} <i data-lucide="arrow-right" class="w-3 h-3 mx-1 text-blue-500"></i> ${tr.to}
+                        </div>
+                        <div class="flex items-center gap-1 mt-1 pt-1 border-t border-gray-100 w-full justify-between text-[10px]">
+                            <span class="text-gray-500 bg-gray-50 px-1 rounded" title="交換比例">比例 ${tr.fromQty}:${tr.toQty}</span>
+                            <span class="text-green-600 font-bold bg-green-50 px-1 rounded" title="此步驟換得數量">得 ${gained}</span>
+                        </div>
+                    </div>`;
+                
+                currentQty = gained; 
+                return stepHtml;
+            }).join('<i data-lucide="arrow-right" class="w-4 h-4 text-gray-400 flex-shrink-0 mx-0.5"></i>');
+        }
+
+        window.startBarterGame = function() {
+            barterState.gameState = 'playing';
+            barterState.timeLeft = 180;
+            barterState.path = [];
+            recalculateInventory();
+            barterState.msg = '請點擊網格選擇路徑。雙擊可取消。';
+            renderBarterUI();
+            lucide.createIcons();
+            startBarterTimer();
+        };
+
+        window.handleBarterTrade = function(tradeId) {
+            if(barterState.gameState !== 'playing') return;
+            
+            if (barterState.path.includes(tradeId)) {
+                barterState.msg = '⚠️ 商人只能交易一次喔！';
+                renderBarterUI();
+                lucide.createIcons();
+                return;
+            }
+
+            const level = LEVELS[barterState.currentRound];
+            const trade = level.trades.find(t => t.id === tradeId);
+            const currentQty = barterState.inventory[trade.from] || 0;
+
+            if (currentQty > 0) {
+                barterState.path.push(tradeId);
+                recalculateInventory();
+                barterState.msg = `已將 ${trade.from} 換成 ${trade.to}！`;
+
+                if ((barterState.inventory[level.targetItem] || 0) > 0) {
+                    renderBarterUI();
+                    lucide.createIcons();
+                    setTimeout(() => {
+                        endBarterRound('🛑 換到目標物了！交易強制結束。');
+                    }, 50); 
+                    return;
+                }
+            } else {
+                barterState.msg = `背包沒有 ${trade.from} 可交換喔！`;
+            }
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+        window.undoTrade = function(tradeId) {
+            if(barterState.gameState !== 'playing') return;
+            const index = barterState.path.lastIndexOf(tradeId);
+            if (index !== -1) {
+                barterState.path = barterState.path.slice(0, index);
+                recalculateInventory();
+                barterState.msg = `已退回至此步驟！`;
+                renderBarterUI();
+                lucide.createIcons();
+            }
+        };
+
+        window.revertToStep = function(index) {
+            if(barterState.gameState !== 'playing') return;
+            barterState.path = barterState.path.slice(0, index);
+            recalculateInventory();
+            barterState.msg = `已退回到指定的步驟！`;
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+        window.endBarterRound = function(reason = '') {
+            clearInterval(barterTimer);
+            barterState.gameState = 'roundEnd';
+            const level = LEVELS[barterState.currentRound];
+            const targetQty = barterState.inventory[level.targetItem] || 0;
+            
+            let diff = level.currentOptimalQty - targetQty; 
+            diff = Math.round(diff * 100) / 100;
+            const actualDiff = diff < 0 ? 0 : diff; 
+            
+            barterState.scores.push(actualDiff);
+            barterState.msg = `${reason} 本回合結束。\n你換到 ${targetQty} 個 ${level.targetItem}，極限目標是 ${level.currentOptimalQty} 個。\n本回合失分：${actualDiff} 分`;
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+        window.nextBarterRound = function() {
+            if (barterState.currentRound + 1 < LEVELS.length) {
+                barterState.currentRound++;
+                barterState.gameState = 'start';
+                barterState.path = [];
+                barterState.msg = '';
+            } else {
+                barterState.gameState = 'gameOver';
+            }
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+        window.resetBarterGame = function() {
+            barterState.displayMode = 0;
+            barterState.currentRound = 0;
+            barterState.scores = [];
+            barterState.path = [];
+            barterState.gameState = 'modeSelect'; 
+            barterState.msg = '';
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+        function renderBarterUI() {
+            const level = LEVELS[barterState.currentRound];
+            const totalScore = barterState.scores.reduce((a, b) => a + b, 0);
+            
+            let html = `
+                <div class="p-4 bg-white rounded-xl shadow-sm">
+                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                        <h2 class="text-xl font-bold text-green-700 flex items-center"><i data-lucide="refresh-ccw" class="w-5 h-5 mr-2"></i> 最佳路徑挑戰</h2>
+                        <div class="flex gap-2">
+                            <div class="flex items-center font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-full text-sm">
+                                <i data-lucide="award" class="w-4 h-4 mr-1 text-yellow-500"></i> 累積失分: ${Math.round(totalScore*10)/10}
+                            </div>
+                            <div id="barter-timer-container" class="flex items-center font-bold px-2 py-1 rounded-full ${barterState.timeLeft <= 30 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-blue-100 text-blue-600'} text-sm opacity-${barterState.gameState === 'modeSelect' ? '0' : '100'}">
+                                <i data-lucide="timer" class="w-4 h-4 mr-1"></i> <span id="barter-timer-text">${Math.floor(barterState.timeLeft / 60)}:${(barterState.timeLeft % 60).toString().padStart(2, '0')}</span>
+                            </div>
+                        </div>
+                    </div>
+            `;
+
+            if (barterState.gameState === 'modeSelect') {
+                html += `
+                    <div class="text-center py-4 bg-green-50/50 rounded-lg border shadow-sm">
+                        <h3 class="text-xl font-bold mb-3 text-green-700">請選擇數學表示方式</h3>
+                        <p class="text-sm text-gray-700 mb-3 max-w-2xl mx-auto leading-relaxed px-4">
+                            在市場中，物品的交換比例有許多種表示方法。<br/>
+                            請注意：以下四種數學表示方式，所代表的<strong class="text-blue-700">交換價值（匯率）是完全相同</strong>的喔！<br/>
+                            <span class="inline-block bg-white px-4 py-2 rounded mt-2 border border-gray-300 text-left text-sm shadow-sm">
+                                <span class="font-bold text-gray-800">例如「2 根香蕉換 3 根蘿蔔」可以有四種寫法：</span><br/>
+                                <span class="mt-1 flex items-center">① 左右相等表示： 2香蕉 = 3蘿蔔</span>
+                                <span class="mt-1 flex items-center">② 單位方程式法： 1香蕉 = ${renderFractionHTML(3, 2)} 蘿蔔</span>
+                                <span class="mt-1 flex items-center">③ 數值比例表示： 香蕉 : 蘿蔔 = 3 : 2</span>
+                                <span class="mt-1 flex items-center">④ 分數比值表示： ${renderFractionHTML('香蕉', '蘿蔔')} = ${renderFractionHTML(3, 2)}</span>
+                            </span><br/>
+                            <span class="block mt-2 text-orange-600 font-bold">遊戲分為三階段：3x3 (9格)、3x4 (12格)、4x4 (16格)。<br/>每次挑戰的比例都會隨機重新洗牌！</span>
+                        </p>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3 max-w-4xl mx-auto px-2">
+                            <button onclick="selectBarterMode(1)" class="bg-white hover:bg-green-100 border-2 border-green-500 text-green-800 font-bold py-2 px-1 rounded-xl shadow transition-transform hover:scale-105 flex items-center justify-center">
+                                <div class="text-sm md:text-base font-bold">2香蕉 = 3蘿蔔</div>
+                            </button>
+                            <button onclick="selectBarterMode(2)" class="bg-white hover:bg-blue-100 border-2 border-blue-500 text-blue-800 font-bold py-2 px-1 rounded-xl shadow transition-transform hover:scale-105 flex items-center justify-center">
+                                <div class="text-sm md:text-base font-bold flex items-center">1香蕉 = ${renderFractionHTML(3, 2)} 蘿蔔</div>
+                            </button>
+                            <button onclick="selectBarterMode(3)" class="bg-white hover:bg-orange-100 border-2 border-orange-500 text-orange-800 font-bold py-2 px-1 rounded-xl shadow transition-transform hover:scale-105 flex items-center justify-center">
+                                <div class="text-sm md:text-base font-bold">香蕉 : 蘿蔔 = 3 : 2</div>
+                            </button>
+                            <button onclick="selectBarterMode(4)" class="bg-white hover:bg-purple-100 border-2 border-purple-500 text-purple-800 font-bold py-2 px-1 rounded-xl shadow transition-transform hover:scale-105 flex items-center justify-center">
+                                <div class="text-sm md:text-base font-bold flex items-center">${renderFractionHTML('香蕉', '蘿蔔')} = ${renderFractionHTML(3, 2)}</div>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (barterState.gameState === 'start') {
+                let stageStr = "";
+                if (barterState.currentRound === 0) stageStr = "3×3 (9格)";
+                else if (barterState.currentRound === 1) stageStr = "3×4 (12格)";
+                else stageStr = "4×4 (16格)";
+                
+                html += `
+                    <div class="text-center py-6 bg-green-50 rounded-lg">
+                        <h3 class="text-lg font-bold mb-2">第 ${barterState.currentRound + 1} 階段準備 - ${stageStr}</h3>
+                        <p class="text-gray-600 mb-4 text-sm">
+                            起始：<strong class="text-green-700">${level.startQty} 個 ${level.startItem}</strong><br/>
+                            目標：換取盡可能多的 <strong class="text-red-600">${level.targetItem}</strong>
+                            <span class="block text-xs text-red-500 mt-1">(理論最高可換得 <strong>${level.currentOptimalQty}</strong> 個)</span>
+                        </p>
+                        <p class="text-xs text-gray-500 mb-4 leading-relaxed px-4">
+                            💡 提示：商人只能交易一次。點擊網格將背包物品按比例換出。<br/>
+                            🚨 注意：<strong class="text-red-600">背包中出現目標物即強制結束！</strong> 請先放大本金再換目標物。
+                        </p>
+                        <button onclick="startBarterGame()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-full shadow-md transition-transform hover:scale-105">
+                            開始挑戰 (限時3分鐘)
+                        </button>
+                    </div>
+                `;
+            } 
+            else if (barterState.gameState === 'playing') {
+                let inventoryHtml = '';
+                let hasItems = false;
+                for (const [item, qty] of Object.entries(barterState.inventory)) {
+                    if (qty > 0) {
+                        hasItems = true;
+                        inventoryHtml += `<div class="bg-white border-2 border-green-300 px-2 py-1 rounded font-bold text-xs flex items-center shadow-sm text-gray-700">${item} <span class="ml-1 text-green-700 text-sm">x ${qty}</span></div>`;
+                    }
+                }
+                if (!hasItems) inventoryHtml = `<span class="text-gray-400 text-sm">背包空空如也...</span>`;
+
+                let pathHtml = barterState.path.map((id, idx) => {
+                    const tr = level.trades.find(t=>t.id===id);
+                    return `<span ondblclick="revertToStep(${idx})" class="no-select inline-flex items-center text-[10px] font-bold px-2 py-1 bg-white border border-blue-400 rounded-full shadow-sm text-blue-700 cursor-pointer hover:bg-red-50 hover:border-red-400 hover:text-red-600 transition-colors" title="雙擊可取消此步與後續交易">${tr.from} <i data-lucide="arrow-right" class="w-3 h-3 mx-1 text-blue-500"></i> ${tr.to}</span>`;
+                }).join('<i data-lucide="arrow-right" class="w-4 h-4 text-gray-400 mx-0.5 font-bold"></i>');
+
+                if (barterState.path.length === 0) pathHtml = '<span class="text-xs text-gray-500">尚無交易，請點擊下方網格。</span>';
+
+                // 渲染網格商人
+                const activeTrades = level.trades;
+                let tradesHtml = '';
+                
+                activeTrades.forEach(t => {
+                    const isUsed = barterState.path.includes(t.id);
+                    const canTrade = (barterState.inventory[t.from] || 0) > 0 && !isUsed;
+                    
+                    let badgeHtml = '';
+                    if (isUsed) {
+                        badgeHtml = `<div class="absolute -top-1 -right-1 bg-gray-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold shadow-md">✓</div>`;
+                    }
+
+                    let bgClass = 'bg-white border-gray-200';
+                    let cursorClass = 'cursor-not-allowed opacity-50';
+                    
+                    if (isUsed) {
+                        bgClass = 'bg-gray-200 border-gray-300 opacity-40';
+                        cursorClass = 'cursor-not-allowed';
+                    } else if (canTrade) {
+                        bgClass = 'bg-green-50 border-green-500 ring-2 ring-green-300 ring-offset-1 z-10 shadow-md transform scale-105';
+                        cursorClass = 'cursor-pointer hover:bg-green-100 transition-all';
+                    }
+
+                    // 處理四種表示法的渲染
+                    let { n, d } = simplify(t.toQty, t.fromQty);
+                    let fractionHtml = renderFractionHTML(n, d);
+                    let ratioStr = `${t.toQty} : ${t.fromQty}`;
+                    
+                    let tradeContent = '';
+                    if (barterState.displayMode === 1) {
+                        tradeContent = `<div class="text-[15px] font-bold text-gray-800 whitespace-nowrap">${t.fromQty}${t.from} = ${t.toQty}${t.to}</div>`;
+                    } else if (barterState.displayMode === 2) {
+                        tradeContent = `<div class="text-[14px] font-bold text-gray-800 flex items-center justify-center gap-x-1 whitespace-nowrap">1${t.from} = ${fractionHtml} ${t.to}</div>`;
+                    } else if (barterState.displayMode === 3) {
+                        tradeContent = `<div class="text-[14px] font-bold text-gray-800 flex items-center justify-center whitespace-nowrap">${t.from} : ${t.to} = ${ratioStr}</div>`;
+                    } else if (barterState.displayMode === 4) {
+                        let itemFractionHtml = renderFractionHTML(t.from, t.to);
+                        tradeContent = `<div class="text-[14px] font-bold text-gray-800 flex items-center justify-center gap-x-1 whitespace-nowrap">${itemFractionHtml} = ${fractionHtml}</div>`;
+                    }
+
+                    tradesHtml += `
+                        <div ondblclick="undoTrade(${t.id})" onclick="handleBarterTrade(${t.id})" class="no-select relative border-2 rounded-lg px-2 py-3 flex flex-col items-center justify-center transition-all min-h-[4.5rem] ${bgClass} ${cursorClass}" title="點擊交易 / 雙擊取消">
+                            ${tradeContent}
+                            ${badgeHtml}
+                        </div>
+                    `;
+                });
+                
+                // 動態調整網格的 CSS 類別，大幅放寬寬度讓文字不換行
+                let gridClass = "grid gap-3 mb-4 mx-auto w-full ";
+                if (level.trades.length === 9) gridClass += "grid-cols-2 md:grid-cols-3 max-w-3xl";
+                else if (level.trades.length === 12) gridClass += "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 max-w-4xl"; 
+                else gridClass += "grid-cols-2 md:grid-cols-4 max-w-5xl"; // 4x4
+
+                html += `
+                    <div>
+                        <div class="flex justify-between items-end mb-1">
+                            <h3 class="font-bold text-gray-700 text-sm">背包內容：</h3>
+                            <div class="text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-200 text-xs shadow-sm">
+                                目標：【${level.targetItem}】
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-1.5 mb-2 bg-green-50/50 p-2 rounded-lg border border-green-100 min-h-[40px]">
+                            ${inventoryHtml}
+                        </div>
+
+                        <div class="mb-3 p-2 bg-blue-50/50 border border-blue-100 rounded-lg">
+                            <h4 class="font-bold text-blue-800 text-xs mb-1 flex items-center"><i data-lucide="map" class="w-3 h-3 mr-1"></i>你的路徑 (雙擊倒退)：</h4>
+                            <div class="flex flex-wrap gap-1 items-center">
+                                ${pathHtml}
+                            </div>
+                        </div>
+
+                        <div class="${gridClass}">
+                            ${tradesHtml}
+                        </div>
+
+                        <div class="flex items-center justify-between mt-2">
+                            <span class="text-blue-600 font-bold text-xs">${barterState.msg}</span>
+                            <button onclick="endBarterRound('玩家提前結算！')" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-1.5 rounded-lg font-bold shadow-md text-sm">
+                                結算
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            else if (barterState.gameState === 'roundEnd') {
+                const targetQty = barterState.inventory[level.targetItem] || 0;
+                const myPathStr = getPathString(barterState.path, level);
+                const optPathStr = getPathString(level.currentOptimalPath, level); 
+
+                html += `
+                    <div class="text-center py-6 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <h3 class="text-lg font-bold mb-3 whitespace-pre-line">${barterState.msg}</h3>
+                        
+                        <div class="mt-4 text-left bg-white p-3 rounded-lg border border-yellow-300 shadow-sm w-full max-w-3xl mx-auto overflow-x-auto">
+                            <h4 class="font-bold text-gray-800 mb-2 flex items-center text-sm"><i data-lucide="map-pin" class="w-4 h-4 mr-1 text-blue-500"></i> 路徑比較</h4>
+                            
+                            <div class="mb-3 bg-gray-50 p-2 rounded border border-gray-200">
+                                <div class="text-xs text-gray-600 mb-2 font-bold">👤 你獲得：<span class="text-blue-600 text-base">${targetQty}</span></div>
+                                <div class="flex flex-wrap items-center gap-y-2 gap-x-1">${myPathStr}</div>
+                            </div>
+                            
+                            <div class="bg-yellow-100/50 p-2 rounded border border-yellow-400">
+                                <div class="text-xs text-yellow-700 mb-2 font-bold">🌟 最佳目標：<span class="text-red-600 text-base">${level.currentOptimalQty}</span></div>
+                                <div class="flex flex-wrap items-center gap-y-2 gap-x-1">${optPathStr}</div>
+                            </div>
+                        </div>
+
+                        <button onclick="nextBarterRound()" class="mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-full shadow-md transition-transform hover:scale-105">
+                            ${barterState.currentRound === LEVELS.length - 1 ? '遊戲結束' : '下一階段'}
+                        </button>
+                    </div>
+                `;
+            }
+            else if (barterState.gameState === 'gameOver') {
+                html += `
+                    <div class="text-center py-6 bg-blue-50 rounded-lg border border-blue-200">
+                        <i data-lucide="award" class="w-12 h-12 text-yellow-500 mx-auto mb-2"></i>
+                        <h3 class="text-2xl font-bold mb-2">遊戲結束！</h3>
+                        <p class="text-lg mb-4">你的總失分：<strong class="text-red-600 text-2xl">${Math.round(totalScore*10)/10}</strong> 分</p>
+                        <button onclick="resetBarterGame()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full shadow-md">
+                            回到模式選擇
+                        </button>
+                    </div>
+                `;
+            }
+
+            html += generateTeacherTip("引導討論：\n1. 【數學表徵轉換】發現了嗎？不管是用等式、比還是分數比值，它們在背後代表的數學意義與交換價值都是完全一樣的！能靈活轉換表徵是數感很重要的一環。\n2. 【目標陷阱】一旦換到目標物交易就會強制結束！這告訴我們理財必須『先放大本金』後，再去做最終兌換。\n3. 【路徑規劃】現實中的理財規劃，需要看長遠的路線，有時候繞遠路反而賺得更多！");
+            html += `</div>`;
+            document.getElementById('app-main').innerHTML = html;
+        }
+
+        // ==========================================
+        // 程式初始化
+        // ==========================================
+        window.onload = () => {
+            renderBarterUI();
+            lucide.createIcons();
+        };
+
+    </script>
+</body>
+</html>
